@@ -16,7 +16,7 @@ Future<void> main() async {
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
-  // 🔥 PAKSA LOGOUT SETIAP APLIKASI DIBUKA
+
   // supaya currentSession SELALU null saat start
   await Supabase.instance.client.auth.signOut();
 

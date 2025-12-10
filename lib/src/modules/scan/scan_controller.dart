@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import '../../data/models/guardian.dart';
 import '../../data/services/supabase_service.dart';
 
@@ -11,11 +12,14 @@ class ScanController extends GetxController {
   final SupabaseService supabaseService;
   final String eventName;
 
+  /// Kamera controller
   final MobileScannerController cameraController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
+    torchEnabled: false,
   );
 
+  // Reactive states
   final RxBool isProcessing = false.obs;
   final RxBool isFlashOn = false.obs;
   final RxBool isFrontCamera = false.obs;
@@ -25,50 +29,54 @@ class ScanController extends GetxController {
   final RxString statusMessage = ''.obs;
 
   // =============================================================
-  // TOGGLE FLASH
+  //  FLASH (TORCH)
   // =============================================================
   Future<void> toggleFlash() async {
     try {
       await cameraController.toggleTorch();
       isFlashOn.value = !isFlashOn.value;
     } catch (e) {
+      scanStatus.value = ScanStatus.error;
       statusMessage.value = "Flash gagal digunakan.";
-      scanStatus.value = ScanStatus.error;
     }
   }
 
   // =============================================================
-  // SWITCH CAMERA (BACK <-> FRONT)
+  //  SWITCH CAMERA
   // =============================================================
-  void switchCamera() {
+  Future<void> switchCamera() async {
     try {
+      await cameraController.switchCamera();
+
       isFrontCamera.value = !isFrontCamera.value;
-      cameraController.switchCamera();
+
+      // Matikan flash saat pindah kamera biar aman
+      isFlashOn.value = false;
     } catch (e) {
-      statusMessage.value = "Tidak dapat mengganti kamera.";
       scanStatus.value = ScanStatus.error;
+      statusMessage.value = "Kamera gagal diganti.";
     }
   }
 
   // =============================================================
-  // HANDLE SCAN
+  //  HANDLE BARCODE / QR
   // =============================================================
   Future<void> handleBarcodeCapture(BarcodeCapture capture) async {
-    if (isProcessing.value) return;
+    if (isProcessing.value) return; // cegah double scan
 
     final barcode = capture.barcodes.firstOrNull;
-    final rawValue = barcode?.rawValue;
+    final raw = barcode?.rawValue;
 
-    if (rawValue == null) {
+    if (raw == null) {
       _showError("QR tidak terbaca.");
       return;
     }
 
     int id;
     try {
-      id = int.parse(rawValue.trim());
+      id = int.parse(raw.trim());
     } catch (_) {
-      _showError("Format QR salah.");
+      _showError("Format QR salah (bukan angka).");
       return;
     }
 
@@ -87,6 +95,7 @@ class ScanController extends GetxController {
         return;
       }
 
+      // Insert attendance
       await supabaseService.insertAttendance(
         guardianId: guardian.idWali,
         eventName: eventName,
@@ -95,6 +104,9 @@ class ScanController extends GetxController {
       lastGuardian.value = guardian;
       scanStatus.value = ScanStatus.success;
       statusMessage.value = "Absensi berhasil: ${guardian.namaWali}";
+
+      // Notify other controllers automatically
+      _triggerGlobalRefresh();
     } catch (e) {
       _showError("Kesalahan: $e");
     } finally {
@@ -102,6 +114,18 @@ class ScanController extends GetxController {
     }
   }
 
+  // =============================================================
+  //  GLOBAL REFRESH SIGNAL
+  // =============================================================
+  void _triggerGlobalRefresh() {
+    /// Kirim event agar Home, Hadir, Tidak Hadir ikut update
+    if (Get.isRegistered(tag: "globalRefresh")) {
+      Get.find<RxBool>(tag: "globalRefresh").toggle();
+    }
+  }
+
+  // =============================================================
+  //  ERROR HELPERS
   // =============================================================
   void _showNotFound(String msg) {
     lastGuardian.value = null;

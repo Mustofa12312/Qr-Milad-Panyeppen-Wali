@@ -11,19 +11,20 @@ class ScanView extends GetView<ScanController> {
 
   @override
   Widget build(BuildContext context) {
-    final double camWidth = MediaQuery.of(context).size.width * 0.80;
+    final double camSize = MediaQuery.of(context).size.width * 0.80;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
 
       // =========================================================
-      // PREMIUM APPBAR + Flash + Switch Camera (Centered)
+      // APPBAR PREMIUM – TITLE + FLASH + SWITCH CAMERA
       // =========================================================
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(120),
         child: SafeArea(
           child: Column(
             children: [
+              const SizedBox(height: 4),
               const Text(
                 "Scan QR Wali",
                 style: TextStyle(
@@ -33,14 +34,14 @@ class ScanView extends GetView<ScanController> {
                   letterSpacing: 0.5,
                 ),
               ),
+              const SizedBox(height: 12),
 
-              const SizedBox(height: 14),
-
-              // Centered Buttons
+              // Row tombol flash & switch kamera (tengah)
               Obx(() {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // Flash
                     _glassIcon(
                       icon: controller.isFlashOn.value
                           ? CupertinoIcons.bolt_fill
@@ -51,6 +52,7 @@ class ScanView extends GetView<ScanController> {
                       onTap: controller.toggleFlash,
                     ),
                     const SizedBox(width: 16),
+                    // Switch kamera depan/belakang
                     _glassIcon(
                       icon: CupertinoIcons.camera_rotate,
                       color: Colors.white,
@@ -65,12 +67,12 @@ class ScanView extends GetView<ScanController> {
       ),
 
       // =========================================================
-      // BODY FULL SCREEN STACK
+      // BODY
       // =========================================================
       body: Stack(
         alignment: Alignment.center,
         children: [
-          // ----- Background gradient -----
+          // BACKGROUND GRADIENT
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -85,17 +87,17 @@ class ScanView extends GetView<ScanController> {
             ),
           ),
 
-          // =========================================================
-          //  COLUMN UTAMA — SEMUANYA SIMETRIS PUSAT
-          // =========================================================
+          // =====================================================
+          // KONTEN UTAMA – SEMUANYA SIMETRIS TENGAH
+          // =====================================================
           Column(
             children: [
               const Spacer(),
 
-              // ================= CAMERA CENTER =================
+              // ======================== CAMERA VIEW ========================
               Container(
-                width: camWidth,
-                height: camWidth,
+                width: camSize,
+                height: camSize,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(22),
                 ),
@@ -104,11 +106,16 @@ class ScanView extends GetView<ScanController> {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
+                      // Kamera
                       MobileScanner(
                         controller: controller.cameraController,
                         onDetect: controller.handleBarcodeCapture,
                       ),
+
+                      // Overlay gelap tipis
                       Container(color: Colors.black.withOpacity(0.18)),
+
+                      // Frame & animasi
                       _scanFrame(),
                     ],
                   ),
@@ -117,25 +124,25 @@ class ScanView extends GetView<ScanController> {
 
               const SizedBox(height: 16),
 
-              // ================= STATUS CENTER =================
+              // ======================== STATUS TOAST ========================
               Obx(() => _statusToast()),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-              // ================= RESULT CARD =================
+              // ======================== RESULT CARD ========================
               Obx(() {
                 final g = controller.lastGuardian.value;
 
                 return AnimatedSwitcher(
                   duration: const Duration(milliseconds: 350),
+                  switchInCurve: Curves.easeOut,
+                  switchOutCurve: Curves.easeIn,
                   child: g == null
                       ? const SizedBox()
                       : Padding(
+                          key: const ValueKey("resultCard"),
                           padding: const EdgeInsets.symmetric(horizontal: 22),
-                          child: AttendanceResultCard(
-                            key: const ValueKey("resultCard"),
-                            guardian: g,
-                          ),
+                          child: AttendanceResultCard(guardian: g),
                         ),
                 );
               }),
@@ -149,40 +156,44 @@ class ScanView extends GetView<ScanController> {
   }
 
   // =========================================================
-  // GLASS ICON BUTTON (Flash & Switch)
+  // GLASS ICON BUTTON (Flash & Switch Camera)
   // =========================================================
   Widget _glassIcon({
     required IconData icon,
     required Color color,
-    required Function() onTap,
+    required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.20),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.28)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 180),
+        scale: 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.20),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: color, size: 22),
         ),
-        child: Icon(icon, color: color, size: 22),
       ),
     );
   }
 
   // =========================================================
-  // ANIMATED SCAN FRAME
+  // ANIMATED SCAN FRAME (scale + glow halus)
   // =========================================================
   Widget _scanFrame() {
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.7, end: 1),
+      tween: Tween(begin: 0.9, end: 1.0),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutBack,
       builder: (_, scale, __) {
@@ -199,10 +210,42 @@ class ScanView extends GetView<ScanController> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.white.withOpacity(0.15),
-                  blurRadius: 25,
+                  color: Colors.white.withOpacity(0.18),
+                  blurRadius: 26,
                 ),
               ],
+            ),
+            child: _animatedScanLine(),
+          ),
+        );
+      },
+    );
+  }
+
+  // =========================================================
+  // SCAN LINE ANIMATION (garis bergerak vertikal)
+  // =========================================================
+  Widget _animatedScanLine() {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: -1, end: 1),
+      duration: const Duration(milliseconds: 1600),
+      curve: Curves.easeInOut,
+      onEnd: () {},
+      builder: (context, value, child) {
+        return Align(
+          alignment: Alignment(0, value),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 26),
+            height: 2,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(100),
+              gradient: LinearGradient(
+                colors: [
+                  Colors.transparent,
+                  Colors.white.withOpacity(0.85),
+                  Colors.transparent,
+                ],
+              ),
             ),
           ),
         );
@@ -211,7 +254,7 @@ class ScanView extends GetView<ScanController> {
   }
 
   // =========================================================
-  // STATUS TOAST
+  // STATUS TOAST (Fade + Slide halus)
   // =========================================================
   Widget _statusToast() {
     final c = Get.find<ScanController>();
@@ -220,34 +263,43 @@ class ScanView extends GetView<ScanController> {
 
     final color = _statusColor(c.scanStatus.value);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.22),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_statusIcon(c.scanStatus.value), color: color, size: 18),
-          const SizedBox(width: 10),
-          Text(
-            c.statusMessage.value,
-            style: TextStyle(
-              fontSize: 14,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          if (c.isProcessing.value) ...[
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOut,
+      switchOutCurve: Curves.easeIn,
+      child: Container(
+        key: ValueKey<String>(c.statusMessage.value),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.22),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_statusIcon(c.scanStatus.value), color: color, size: 18),
             const SizedBox(width: 10),
-            const CupertinoActivityIndicator(radius: 8),
+            Text(
+              c.statusMessage.value,
+              style: TextStyle(
+                fontSize: 14,
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (c.isProcessing.value) ...[
+              const SizedBox(width: 10),
+              const CupertinoActivityIndicator(radius: 8),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
+  // =========================================================
+  // STATUS ICON + COLOR
+  // =========================================================
   IconData _statusIcon(ScanStatus status) {
     switch (status) {
       case ScanStatus.success:

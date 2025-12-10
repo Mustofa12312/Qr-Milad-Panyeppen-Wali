@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../../data/models/guardian.dart';
 import '../../data/services/supabase_service.dart';
@@ -12,14 +13,14 @@ class ScanController extends GetxController {
   final SupabaseService supabaseService;
   final String eventName;
 
-  /// Kamera controller
   final MobileScannerController cameraController = MobileScannerController(
     detectionSpeed: DetectionSpeed.noDuplicates,
     facing: CameraFacing.back,
     torchEnabled: false,
   );
 
-  // Reactive states
+  final AudioPlayer _player = AudioPlayer();
+
   final RxBool isProcessing = false.obs;
   final RxBool isFlashOn = false.obs;
   final RxBool isFrontCamera = false.obs;
@@ -29,46 +30,58 @@ class ScanController extends GetxController {
   final RxString statusMessage = ''.obs;
 
   // =============================================================
-  //  FLASH (TORCH)
+  // SOUND EFFECT
+  // =============================================================
+  Future<void> _playSuccessSound() async {
+    try {
+      await _player.play(AssetSource("sounds/success.mp3"));
+    } catch (_) {}
+  }
+
+  Future<void> _playErrorSound() async {
+    try {
+      await _player.play(AssetSource("sounds/error.mp3"));
+    } catch (_) {}
+  }
+
+  // =============================================================
+  // FLASH
   // =============================================================
   Future<void> toggleFlash() async {
     try {
       await cameraController.toggleTorch();
       isFlashOn.value = !isFlashOn.value;
     } catch (e) {
-      scanStatus.value = ScanStatus.error;
-      statusMessage.value = "Flash gagal digunakan.";
+      _showError("Flash gagal digunakan.");
+      _playErrorSound();
     }
   }
 
   // =============================================================
-  //  SWITCH CAMERA
+  // SWITCH CAMERA
   // =============================================================
   Future<void> switchCamera() async {
     try {
       await cameraController.switchCamera();
-
       isFrontCamera.value = !isFrontCamera.value;
-
-      // Matikan flash saat pindah kamera biar aman
       isFlashOn.value = false;
     } catch (e) {
-      scanStatus.value = ScanStatus.error;
-      statusMessage.value = "Kamera gagal diganti.";
+      _showError("Kamera gagal diganti.");
+      _playErrorSound();
     }
   }
 
   // =============================================================
-  //  HANDLE BARCODE / QR
+  // HANDLE QR SCAN
   // =============================================================
   Future<void> handleBarcodeCapture(BarcodeCapture capture) async {
-    if (isProcessing.value) return; // cegah double scan
+    if (isProcessing.value) return;
 
-    final barcode = capture.barcodes.firstOrNull;
-    final raw = barcode?.rawValue;
+    final raw = capture.barcodes.firstOrNull?.rawValue;
 
     if (raw == null) {
       _showError("QR tidak terbaca.");
+      _playErrorSound();
       return;
     }
 
@@ -76,26 +89,42 @@ class ScanController extends GetxController {
     try {
       id = int.parse(raw.trim());
     } catch (_) {
-      _showError("Format QR salah (bukan angka).");
+      _showError("Format QR tidak valid (harus angka).");
+      _playErrorSound();
       return;
     }
 
     if (id < 1 || id > 1500) {
-      _showError("ID di luar rentang 1–1500.");
+      _showError("ID harus dalam rentang 1–1500.");
+      _playErrorSound();
       return;
     }
 
     isProcessing.value = true;
 
     try {
+      // Langkah 1 — ambil data guardian
       final guardian = await supabaseService.getGuardianById(id);
 
       if (guardian == null) {
         _showNotFound("Data untuk ID $id tidak ditemukan.");
+        _playErrorSound();
         return;
       }
 
-      // Insert attendance
+      // Langkah 2 — cek apakah sudah absen hari ini
+      final alreadyToday = await supabaseService.hasAttendanceToday(
+        guardian.idWali,
+        eventName,
+      );
+
+      if (alreadyToday) {
+        _showError("Wali ini sudah absen hari ini.");
+        _playErrorSound();
+        return;
+      }
+
+      // Langkah 3 — simpan absensi
       await supabaseService.insertAttendance(
         guardianId: guardian.idWali,
         eventName: eventName,
@@ -105,27 +134,28 @@ class ScanController extends GetxController {
       scanStatus.value = ScanStatus.success;
       statusMessage.value = "Absensi berhasil: ${guardian.namaWali}";
 
-      // Notify other controllers automatically
+      _playSuccessSound();
+
       _triggerGlobalRefresh();
     } catch (e) {
       _showError("Kesalahan: $e");
+      _playErrorSound();
     } finally {
       isProcessing.value = false;
     }
   }
 
   // =============================================================
-  //  GLOBAL REFRESH SIGNAL
+  // REFRESH DATA GLOBAL
   // =============================================================
   void _triggerGlobalRefresh() {
-    /// Kirim event agar Home, Hadir, Tidak Hadir ikut update
-    if (Get.isRegistered(tag: "globalRefresh")) {
+    if (Get.isRegistered<RxBool>(tag: "globalRefresh")) {
       Get.find<RxBool>(tag: "globalRefresh").toggle();
     }
   }
 
   // =============================================================
-  //  ERROR HELPERS
+  // ERROR HANDLERS
   // =============================================================
   void _showNotFound(String msg) {
     lastGuardian.value = null;
@@ -143,6 +173,7 @@ class ScanController extends GetxController {
   @override
   void onClose() {
     cameraController.dispose();
+    _player.dispose();
     super.onClose();
   }
 }

@@ -9,17 +9,14 @@ class AbsentView extends GetView<AbsentController> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedLetter = ''.obs;
-    final showBubble = false.obs;
-
     final Map<String, GlobalKey> sectionKeys = {};
 
     return Scaffold(
       body: Stack(
         children: [
-          // ================================
-          // PREMIUM BLUR BACKGROUND
-          // ================================
+          // ==============================
+          // BACKGROUND
+          // ==============================
           GlassEffects.dynamicGlass(
             animation: const AlwaysStoppedAnimation(1),
             maxBlur: 45,
@@ -39,29 +36,20 @@ class AbsentView extends GetView<AbsentController> {
             ),
           ),
 
-          // BOKEH
-          Positioned(top: -60, left: -40, child: _bokeh(160, Colors.redAccent)),
-          Positioned(
-            bottom: -50,
-            right: -30,
-            child: _bokeh(190, Colors.orange),
-          ),
-
-          // ================================
-          // CONTENT AREA
-          // ================================
+          // ==============================
+          // CONTENT
+          // ==============================
           SafeArea(
             child: Column(
               children: [
                 const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: EdgeInsets.symmetric(vertical: 14),
                   child: Text(
                     "Yang Belum Hadir",
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
-                      letterSpacing: 0.6,
                     ),
                   ),
                 ),
@@ -72,29 +60,30 @@ class AbsentView extends GetView<AbsentController> {
                       return const Center(child: CupertinoActivityIndicator());
                     }
 
-                    if (controller.guardians.isEmpty) {
+                    if (controller.filtered.isEmpty) {
                       return const Center(
                         child: Text(
-                          "Semua wali murid sudah hadir 🎉",
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                          "Semua wali sudah hadir 🎉",
+                          style: TextStyle(color: Colors.white70, fontSize: 16),
                         ),
                       );
                     }
 
-                    // =================================
-                    // GROUP BY FIRST LETTER
-                    // =================================
+                    // ==============================
+                    // GROUP BY HURUF AWAL
+                    // ==============================
                     final Map<String, List<dynamic>> groups = {};
-                    for (var g in controller.guardians) {
+                    for (var g in controller.filtered) {
                       final name = g.namaWali.trim();
                       if (name.isEmpty) continue;
-                      String first = name[0].toUpperCase();
-                      groups.putIfAbsent(first, () => []);
-                      groups[first]!.add(g);
-                    }
-                    final sortedKeys = groups.keys.toList()..sort();
 
-                    for (var k in sortedKeys) {
+                      final letter = name[0].toUpperCase();
+                      groups.putIfAbsent(letter, () => []);
+                      groups[letter]!.add(g);
+                    }
+
+                    final keys = groups.keys.toList()..sort();
+                    for (var k in keys) {
                       sectionKeys.putIfAbsent(k, () => GlobalKey());
                     }
 
@@ -104,34 +93,30 @@ class AbsentView extends GetView<AbsentController> {
                         vertical: 10,
                       ),
                       physics: const BouncingScrollPhysics(),
-                      itemCount: sortedKeys.length,
+                      itemCount: keys.length,
                       itemBuilder: (context, index) {
-                        final key = sortedKeys[index];
-                        final list = groups[key]!;
+                        final letter = keys[index];
+                        final list = groups[letter]!;
 
                         return Column(
-                          key: sectionKeys[key],
+                          key: sectionKeys[letter],
                           children: [
-                            // Garis pemisah antar group (tanpa huruf)
                             if (index != 0)
-                              Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                height: 1,
-                                width: double.infinity,
-                                color: Colors.white.withOpacity(0.20),
+                              Divider(
+                                height: 20,
+                                color: Colors.white.withOpacity(0.2),
                               ),
 
-                            // CARD
-                            ...list.map((g) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: _glassAbsentCard(
+                            ...list.map(
+                              (g) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _glassCard(
                                   name: g.namaWali,
                                   student: "${g.namaMurid} • ${g.kelasMurid}",
                                   id: g.idWali.toString(),
                                 ),
-                              );
-                            }),
+                              ),
+                            ),
                           ],
                         );
                       },
@@ -142,25 +127,25 @@ class AbsentView extends GetView<AbsentController> {
             ),
           ),
 
-          // ===================================
-          // INDEX A–Z KANAN DENGAN ANIMASI
-          // ===================================
+          // ==============================
+          // INDEX A–Z
+          // ==============================
           Positioned(
             right: 6,
             top: 0,
             bottom: 0,
-            child: Obx(
-              () => Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: sectionKeys.keys.map((letter) {
-                  final isSelected = selectedLetter.value == letter;
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: sectionKeys.keys.map((letter) {
+                return Obx(() {
+                  final isSelected = controller.selectedLetter.value == letter;
 
                   return GestureDetector(
                     onTapDown: (_) {
-                      selectedLetter.value = letter;
-                      showBubble.value = true;
+                      controller.selectedLetter.value = letter;
+                      controller.showBubble.value = true;
 
-                      final ctx = sectionKeys[letter]!.currentContext;
+                      final ctx = sectionKeys[letter]?.currentContext;
                       if (ctx != null) {
                         Scrollable.ensureVisible(
                           ctx,
@@ -171,11 +156,11 @@ class AbsentView extends GetView<AbsentController> {
 
                       Future.delayed(
                         const Duration(milliseconds: 600),
-                        () => showBubble.value = false,
+                        () => controller.showBubble.value = false,
                       );
                     },
                     child: AnimatedScale(
-                      scale: isSelected ? 1.7 : 1.0,
+                      scale: isSelected ? 1.6 : 1.0,
                       duration: const Duration(milliseconds: 150),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
@@ -192,18 +177,20 @@ class AbsentView extends GetView<AbsentController> {
                       ),
                     ),
                   );
-                }).toList(),
-              ),
+                });
+              }).toList(),
             ),
           ),
 
-          // ===================================
-          // BUBBLE HURUF DI TENGAH
-          // ===================================
+          // ==============================
+          // BUBBLE HURUF
+          // ==============================
           Obx(() {
-            if (!showBubble.value || selectedLetter.value.isEmpty) {
+            if (!controller.showBubble.value ||
+                controller.selectedLetter.value.isEmpty) {
               return const SizedBox();
             }
+
             return Center(
               child: Container(
                 padding: const EdgeInsets.all(30),
@@ -212,7 +199,7 @@ class AbsentView extends GetView<AbsentController> {
                   shape: BoxShape.circle,
                 ),
                 child: Text(
-                  selectedLetter.value,
+                  controller.selectedLetter.value,
                   style: const TextStyle(
                     fontSize: 42,
                     fontWeight: FontWeight.bold,
@@ -227,66 +214,31 @@ class AbsentView extends GetView<AbsentController> {
     );
   }
 
-  // BOKEH EFFECT
-  Widget _bokeh(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            color.withOpacity(0.45),
-            color.withOpacity(0.1),
-            Colors.transparent,
-          ],
-        ),
-      ),
-    );
-  }
-
-  // GLASS CARD ABJAD
-  Widget _glassAbsentCard({
+  // ==============================
+  // CARD
+  // ==============================
+  Widget _glassCard({
     required String name,
     required String student,
     required String id,
   }) {
     return GlassEffects.dynamicGlass(
       animation: const AlwaysStoppedAnimation(1),
-      maxBlur: 28,
+      maxBlur: 24,
       minBlur: 10,
       borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            colors: [
-              Colors.white.withOpacity(0.12),
-              Colors.white.withOpacity(0.05),
-            ],
-          ),
-          border: Border.all(color: Colors.white.withOpacity(0.28), width: 1.2),
+          border: Border.all(color: Colors.white.withOpacity(0.25)),
         ),
         child: Row(
           children: [
-            GlassEffects.dynamicGlass(
-              animation: const AlwaysStoppedAnimation(1),
-              maxBlur: 12,
-              minBlur: 6,
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: CupertinoColors.systemRed.withOpacity(0.28),
-                ),
-                child: const Icon(
-                  CupertinoIcons.clear_circled_solid,
-                  color: CupertinoColors.systemRed,
-                  size: 26,
-                ),
-              ),
+            const Icon(
+              CupertinoIcons.clear_circled_solid,
+              color: CupertinoColors.systemRed,
+              size: 28,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -296,12 +248,12 @@ class AbsentView extends GetView<AbsentController> {
                   Text(
                     name,
                     style: const TextStyle(
-                      fontSize: 17,
+                      fontSize: 16,
                       fontWeight: FontWeight.w700,
                       color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     student,
                     style: const TextStyle(fontSize: 14, color: Colors.black87),
